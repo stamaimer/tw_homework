@@ -19,6 +19,10 @@ class BC2TestCaseOne(unittest.TestCase):
         self.maxDiff = None
         self.connection, self.cursor = create_tables()
 
+    def tearDown(self):
+        self.cursor.close()
+        self.cursor.connection()
+
     def test_case(self):
 
         with patch("sys.stdin", StringIO("abcdefghijklmnopqrst1234567890")), patch("sys.stdout", new_callable=StringIO) as mocked_out:
