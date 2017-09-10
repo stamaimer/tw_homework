@@ -7,9 +7,12 @@ import sqlite3
 import datetime
 import traceback
 
-from itertools import groupby
+from functools import partial
 
 from dateutil.parser import parse
+
+
+print = partial(print, '>')
 
 
 def is_valid_date(date):
@@ -128,193 +131,200 @@ def main():
 
             if flag == 'B':
 
-                sql = """
-                SELECT EXISTS (SELECT 1 FROM book where date='{date}' AND start_time<'{end_time}' AND end_time>'{start_time}' AND site='{site}')
-                """.format(date=date, start_time=start_time, end_time=end_time, site=site)
-
-                # print(sql)
-
-                exists = cursor.execute(sql).fetchone()[0]
-
-                # print(exists)
-
-                if exists:
-                    print("Error: the booking conflicts with existing bookings!")
-                else:
-
-                    start_hour = parse(start_time).time().hour
-                    end_hour = parse(end_time).time().hour
-
-                    # print(start_hour, end_hour)
-
-                    if weekday in range(5):  # weekdays
-
-                        # print("weekdays")
-
-                        tolldict = {0: 30, 1: 30, 2: 50, 3: 80, 4: 60}
-                        timelist = [9, 12, 18, 20, 22]
-
-                        start_index = bisect.bisect_left(timelist, start_hour)
-                        end_index = bisect.bisect_left(timelist, end_hour)
-
-                        # print(start_index, end_index)
-
-                        if end_index - start_index == 0:
-                            toll = (end_hour - start_hour) * \
-                                tolldict[start_index]
-                        elif end_index - start_index == 1:
-                            toll = (timelist[start_index] - start_hour) * \
-                                tolldict[start_index] + \
-                                (end_hour -
-                                 timelist[end_index - 1]) * tolldict[end_index]
-                        elif end_index - start_index == 2:
-                            if start_index == 1:
-                                toll = (timelist[start_index] - start_hour) * tolldict[start_index] + 300 + (
-                                    end_hour - timelist[end_index - 1]) * tolldict[end_index]
-                            else:
-                                toll = (timelist[start_index] - start_hour) * tolldict[start_index] + 160 + (
-                                    end_hour - timelist[end_index - 1]) * tolldict[end_index]
-                        elif end_index - start_index == 3:
-                            toll = (timelist[start_index] - start_hour) * tolldict[start_index] + 460 + (
-                                end_hour - timelist[end_index - 1]) * tolldict[end_index]
-
-                        # print(toll)
-
-                    else:  # weekends
-
-                        # print("weekends")
-
-                        tolldict = {0: 40, 1: 40, 2: 50, 3: 60}
-                        timelist = [9, 12, 18, 22]
-
-                        start_index = bisect.bisect_left(timelist, start_hour)
-                        end_index = bisect.bisect_left(timelist, end_hour)
-
-                        # print(start_index, end_index)
-
-                        if end_index - start_index == 0:
-                            toll = (end_hour - start_hour) * \
-                                tolldict[start_index]
-                        elif end_index - start_index == 1:
-                            toll = (timelist[start_index] - start_hour) * tolldict[start_index] + (
-                                end_hour - timelist[end_index - 1]) * tolldict[end_index]
-                        elif end_index - start_index == 2:
-                            toll = (timelist[start_index] - start_hour) * tolldict[start_index] + 300 + (
-                                end_hour - timelist[end_index - 1]) * tolldict[end_index]
-
-                        # print(toll)
-
-                    sql = """
-                    INSERT INTO book (user, date, start_time, end_time, site, toll) VALUES ('{user}', '{date}', '{start_time}', '{end_time}', '{site}', {toll})
-                    """.format(user=user, date=date, start_time=start_time, end_time=end_time, site=site, toll=toll)
-
-                    # print(sql)
-
-                    cursor.execute(sql)
-                    connection.commit()
-
-                    print("Success: the booking is accepted!")
+                deal_with_book(user, date, start_time, end_time,
+                               site, weekday, connection, cursor)
 
             if flag == 'C':
 
-                sql = """
-                SELECT id, toll FROM book where user='{user}' AND date='{date}' AND start_time='{start_time}' AND end_time='{end_time}' AND site='{site}'
-                """.format(user=user, date=date, start_time=start_time, end_time=end_time, site=site)
-
-                # print(sql)
-
-                record = cursor.execute(sql).fetchone()
-
-                # print(record)
-
-                if record:
-
-                    sql = """DELETE FROM book WHERE id={id}""".format(
-                        id=record[0])
-
-                    # print(sql)
-
-                    cursor.execute(sql)
-                    connection.commit()
-
-                    if weekday in range(5):
-                        toll = record[1] * 0.5
-                    else:
-                        toll = record[1] * 0.25
-
-                    sql = """
-                    INSERT INTO cancel (user, date, start_time, end_time, site, toll) VALUES ('{user}', '{date}', '{start_time}', '{end_time}', '{site}', {toll})
-                    """.format(user=user, date=date, start_time=start_time, end_time=end_time, site=site, toll=toll)
-
-                    # print(sql)
-
-                    cursor.execute(sql)
-                    connection.commit()
-
-                    print("Success: the booking is accepted!")
-
-                else:
-
-                    print("Error: the booking being cancelled does not exist!")
+                deal_with_cancel(user, date, start_time, end_time,
+                                 site, weekday, connection, cursor)
 
             if flag == 'S':
-                sql = """SELECT date, start_time, end_time, site, toll FROM book ORDER BY site, date, start_time"""
-                book = list(groupby(cursor.execute(sql).fetchall(),
-                                    key=lambda item: item[3]))
-                print(book)
-                sql = """SELECT date, start_time, end_time, site, toll FROM cancel ORDER BY site, date, start_time"""
-                cancel = list(groupby(cursor.execute(
-                    sql).fetchall(), key=lambda item: item[3]))
-                print(cancel)
-                print("收入汇总")
-                sum = 0
-                print("---")
-                print("场地:A")
-                total = 0
-                for item in book[0][1]:
-                    print(item[0], item[1] + '~' + item[2], str(item[4]) + "元")
-                    total += item[4]
-                for item in cancel[0][1]:
-                    print(item[0], item[1] + '~' +
-                          item[2], "违约金", str(item[4]) + "元")
-                    total += item[4]
-                print("小计：", total, "\n")
-                sum += total
-                print("场地:B")
-                total = 0
-                for item in book[1][1]:
-                    print(item[0], item[1] + '~' + item[2], str(item[4]) + "元")
-                    total += item[4]
-                for item in cancel[1][1]:
-                    print(item[0], item[1] + '~' +
-                          item[2], "违约金", str(item[4]) + "元")
-                    total += item[4]
-                print("小计：", total, "\n")
-                sum += total
-                rint("场地:C")
-                total = 0
-                for item in book[2][1]:
-                    print(item[0], item[1] + '~' + item[2], str(item[4]) + "元")
-                    total += item[4]
-                for item in cancel[2][1]:
-                    print(item[0], item[1] + '~' +
-                          item[2], "违约金", str(item[4]) + "元")
-                    total += item[4]
-                print("小计：", total, "\n")
-                sum += total
-                print("场地:D")
-                total = 0
-                for item in book[3][1]:
-                    print(item[0], item[1] + '~' + item[2], str(item[4]) + "元")
-                    total += item[4]
-                for item in cancel[3][1]:
-                    print(item[0], item[1] + '~' +
-                          item[2], "违约金", str(item[4]) + "元")
-                    total += item[4]
-                print("小计：", total, "\n")
-                sum += total
-                print("---")
-                print("总计：", sum)
+
+                deal_with_income(cursor)
+
+
+def deal_with_income(cursor):
+
+    sum = 0
+
+    print("收入汇总")
+    print("---")
+
+    for site in "ABCD":
+        sum += gen_income_by_site(cursor, site)
+        if site != 'D':
+            print()
+
+    print("---")
+    print("总计：" + str(sum) + "元")
+
+
+def gen_income_by_site(cursor, site):
+
+    sql = """SELECT date, start_time, end_time, toll FROM {table_name} WHERE site='{site}' ORDER BY date, start_time"""
+
+    book = cursor.execute(sql.format(table_name="book", site=site)).fetchall()
+
+    cancel = cursor.execute(sql.format(
+        table_name="cancel", site=site)).fetchall()
+
+    total = 0
+
+    print("场地:" + site)
+
+    for item in book:
+        print(item[0], item[1] + '~' + item[2], str(item[3]) + "元")
+        total += item[3]
+
+    for item in cancel:
+        print(item[0], item[1] + '~' + item[2], "违约金", str(item[3]) + "元")
+        total += item[3]
+
+    print("小计：" + str(total) + "元")
+
+    return total
+
+
+def deal_with_cancel(user, date, start_time, end_time, site, weekday, connection, cursor):
+
+    sql = """
+    SELECT id, toll FROM book where user='{user}' AND date='{date}' AND start_time='{start_time}' AND end_time='{end_time}' AND site='{site}'
+    """.format(user=user, date=date, start_time=start_time, end_time=end_time, site=site)
+
+    # print(sql)
+
+    record = cursor.execute(sql).fetchone()
+
+    # print(record)
+
+    if record:
+
+        sql = """DELETE FROM book WHERE id={id}""".format(id=record[0])
+
+        # print(sql)
+
+        cursor.execute(sql)
+        connection.commit()
+
+        if weekday in range(5):
+            toll = record[1] * 0.5
+        else:
+            toll = record[1] * 0.25
+
+        sql = """
+        INSERT INTO cancel (user, date, start_time, end_time, site, toll) VALUES ('{user}', '{date}', '{start_time}', '{end_time}', '{site}', {toll})
+        """.format(user=user, date=date, start_time=start_time, end_time=end_time, site=site, toll=toll)
+
+        # print(sql)
+
+        cursor.execute(sql)
+        connection.commit()
+
+        print("Success: the booking is accepted!")
+
+    else:
+
+        print("Error: the booking being cancelled does not exist!")
+
+
+def deal_with_book(user, date, start_time, end_time, site, weekday, connection, cursor):
+
+    sql = """
+    SELECT EXISTS (SELECT 1 FROM book where date='{date}' AND start_time<'{end_time}' AND end_time>'{start_time}' AND site='{site}')
+    """.format(date=date, start_time=start_time, end_time=end_time, site=site)
+
+    # print(sql)
+
+    exists = cursor.execute(sql).fetchone()[0]
+
+    # print(exists)
+
+    if exists:
+
+        print("Error: the booking conflicts with existing bookings!")
+
+    else:
+
+        toll = cal_toll(start_time, end_time, weekday)
+
+        sql = """
+        INSERT INTO book (user, date, start_time, end_time, site, toll) VALUES ('{user}', '{date}', '{start_time}', '{end_time}', '{site}', {toll})
+        """.format(user=user, date=date, start_time=start_time, end_time=end_time, site=site, toll=toll)
+
+        # print(sql)
+
+        cursor.execute(sql)
+        connection.commit()
+
+        print("Success: the booking is accepted!")
+
+
+def cal_toll(start_time, end_time, weekday):
+
+    start_hour = parse(start_time).time().hour
+    end_hour = parse(end_time).time().hour
+
+    # print(start_hour, end_hour)
+
+    if weekday in range(5):  # weekdays
+
+        # print("weekdays")
+
+        tolldict = {0: 30, 1: 30, 2: 50, 3: 80, 4: 60}
+        timelist = [9, 12, 18, 20, 22]
+
+        start_index = bisect.bisect_left(timelist, start_hour)
+        end_index = bisect.bisect_left(timelist, end_hour)
+
+        # print(start_index, end_index)
+
+        if end_index - start_index == 0:
+            toll = (end_hour - start_hour) * tolldict[start_index]
+        elif end_index - start_index == 1:
+            toll = (timelist[start_index] - start_hour) * tolldict[start_index] + \
+                (end_hour - timelist[end_index - 1]) * tolldict[end_index]
+        elif end_index - start_index == 2:
+            if start_index == 1:
+                toll = (timelist[start_index] - start_hour) * tolldict[start_index] + \
+                    300 + (end_hour -
+                           timelist[end_index - 1]) * tolldict[end_index]
+            else:
+                toll = (timelist[start_index] - start_hour) * tolldict[start_index] + \
+                    160 + (end_hour -
+                           timelist[end_index - 1]) * tolldict[end_index]
+        elif end_index - start_index == 3:
+            toll = (timelist[start_index] - start_hour) * tolldict[start_index] + \
+                460 + (end_hour - timelist[end_index - 1]
+                       ) * tolldict[end_index]
+
+        # print(toll)
+
+    else:  # weekends
+
+        # print("weekends")
+
+        tolldict = {0: 40, 1: 40, 2: 50, 3: 60}
+        timelist = [9, 12, 18, 22]
+
+        start_index = bisect.bisect_left(timelist, start_hour)
+        end_index = bisect.bisect_left(timelist, end_hour)
+
+        # print(start_index, end_index)
+
+        if end_index - start_index == 0:
+            toll = (end_hour - start_hour) * tolldict[start_index]
+        elif end_index - start_index == 1:
+            toll = (timelist[start_index] - start_hour) * tolldict[start_index] + \
+                (end_hour - timelist[end_index - 1]) * tolldict[end_index]
+        elif end_index - start_index == 2:
+            toll = (timelist[start_index] - start_hour) * tolldict[start_index] + \
+                300 + (end_hour - timelist[end_index - 1]
+                       ) * tolldict[end_index]
+
+        # print(toll)
+
+    return toll
 
 
 if __name__ == '__main__':
