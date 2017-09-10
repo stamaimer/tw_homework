@@ -7,3 +7,4 @@
      python bc2.py
 
 #### 测试
+    python tests.py
