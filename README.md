@@ -1,10 +1,10 @@
-### bc2.py
+### Book and Cancel of Badminton Court
 
-#### 运行
+#### Run
      python3 -m venv venv
      source venv/bin/activate
      pip install -r requirements.txt
      python bc2.py
 
-#### 测试
+#### Test
     python tests.py
