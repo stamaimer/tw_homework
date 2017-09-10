@@ -82,9 +82,13 @@ def get_input():
         return ('S', 0, "1993-02-13", "00:00~00:00", 0)
 
 
-def create_tables(cursor):
+def create_tables():
 
     try:
+
+        connection = sqlite3.connect("bc2.db")
+
+        cursor = connection.cursor()
 
         sql = """
         CREATE TABLE IF NOT EXISTS {table_name} (id integer primary key autoincrement,
@@ -103,6 +107,8 @@ def create_tables(cursor):
 
         cursor.execute("""DELETE FROM cancel""")
 
+        return connection, cursor
+
     except:
 
         print(traceback.format_exc())
@@ -110,38 +116,30 @@ def create_tables(cursor):
         exit(1)
 
 
-def main():
+def main(connection, cursor):
 
-    connection = sqlite3.connect("bc2.db")
+    input = get_input()
 
-    cursor = connection.cursor()
+    if input:
 
-    create_tables(cursor)
+        flag, user, date, time, site = input
 
-    while 1:
+        start_time, end_time = time.split('~')
+        weekday = parse(date).date().weekday()
 
-        input = get_input()
+        if flag == 'B':
 
-        if input:
+            deal_with_book(user, date, start_time, end_time,
+                           site, weekday, connection, cursor)
 
-            flag, user, date, time, site = input
+        if flag == 'C':
 
-            start_time, end_time = time.split('~')
-            weekday = parse(date).date().weekday()
+            deal_with_cancel(user, date, start_time, end_time,
+                             site, weekday, connection, cursor)
 
-            if flag == 'B':
+        if flag == 'S':
 
-                deal_with_book(user, date, start_time, end_time,
-                               site, weekday, connection, cursor)
-
-            if flag == 'C':
-
-                deal_with_cancel(user, date, start_time, end_time,
-                                 site, weekday, connection, cursor)
-
-            if flag == 'S':
-
-                deal_with_income(cursor)
+            deal_with_income(cursor)
 
 
 def deal_with_income(cursor):
@@ -328,4 +326,9 @@ def cal_toll(start_time, end_time, weekday):
 
 
 if __name__ == '__main__':
-    main()
+
+    connection, cursor = create_tables()
+
+    while 1:
+
+        main(connection, cursor)
