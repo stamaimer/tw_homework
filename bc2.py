@@ -187,7 +187,7 @@ def gen_income_by_site(cursor, site):
 def deal_with_cancel(user, date, start_time, end_time, site, weekday, connection, cursor):
 
     sql = """
-    SELECT id, toll FROM book where user='{user}' AND date='{date}' AND start_time='{start_time}' AND end_time='{end_time}' AND site='{site}'
+    SELECT id, toll FROM book WHERE user='{user}' AND date='{date}' AND start_time='{start_time}' AND end_time='{end_time}' AND site='{site}'
     """.format(user=user, date=date, start_time=start_time, end_time=end_time, site=site)
 
     # print(sql)
@@ -229,7 +229,7 @@ def deal_with_cancel(user, date, start_time, end_time, site, weekday, connection
 def deal_with_book(user, date, start_time, end_time, site, weekday, connection, cursor):
 
     sql = """
-    SELECT EXISTS (SELECT 1 FROM book where date='{date}' AND start_time<'{end_time}' AND end_time>'{start_time}' AND site='{site}')
+    SELECT EXISTS (SELECT 1 FROM book WHERE date='{date}' AND start_time<'{end_time}' AND end_time>'{start_time}' AND site='{site}')
     """.format(date=date, start_time=start_time, end_time=end_time, site=site)
 
     # print(sql)
